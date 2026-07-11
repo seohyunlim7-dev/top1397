@@ -606,6 +606,13 @@
 
   drawBtn.addEventListener('click', async () => {
     if (isBusy) return;
+    if (typeof gtag === 'function') {
+      gtag('event', 'draw_click', {
+        event_category: 'engagement',
+        event_label: 'lotto_draw',
+        game_count: selectedCount
+      });
+    }
     isBusy = true;
     setControlsDisabled(true);
     drawBtn.textContent = '추첨 중...';

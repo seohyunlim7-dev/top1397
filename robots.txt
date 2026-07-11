@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://top1397.vercel.app/sitemap.xml

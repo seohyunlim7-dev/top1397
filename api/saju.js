@@ -107,29 +107,60 @@ module.exports = async (req, res) => {
 
     const isValid = numbers.length === 6 && bonus !== null && bonus >= 1 && bonus <= 45 && !numbers.includes(bonus);
 
-    if (!isValid) {
-      const fallback = fallbackDraw();
-      res.status(200).json({
-        summary: parsed.summary || '사주 기운을 바탕으로 번호를 추천했어요.',
-        elements: parsed.elements || null,
-        numbers: fallback.numbers,
-        bonus: fallback.bonus,
-        fallback: true
-      });
-      return;
-    }
+    const result = isValid
+      ? { summary: parsed.summary, elements: parsed.elements, numbers, bonus, fallback: false }
+      : (() => {
+          const fb = fallbackDraw();
+          return {
+            summary: parsed.summary || '사주 기운을 바탕으로 번호를 추천했어요.',
+            elements: parsed.elements || null,
+            numbers: fb.numbers,
+            bonus: fb.bonus,
+            fallback: true
+          };
+        })();
 
-    res.status(200).json({
-      summary: parsed.summary,
-      elements: parsed.elements,
-      numbers,
-      bonus,
-      fallback: false
+    await saveToSupabase({
+      birth_date: birthDate,
+      birth_time: timeUnknown || !birthTime ? null : birthTime,
+      time_unknown: !!timeUnknown || !birthTime,
+      gender: gender || null,
+      summary: result.summary,
+      elements: result.elements,
+      numbers: result.numbers,
+      bonus: result.bonus,
+      fallback: result.fallback
     });
+
+    res.status(200).json(result);
   } catch (err) {
     res.status(500).json({ error: 'AI 분석 중 오류가 발생했습니다.' });
   }
 };
+
+async function saveToSupabase(record) {
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !serviceKey) return;
+
+  try {
+    const res = await fetch(`${supabaseUrl}/rest/v1/saju_draws`, {
+      method: 'POST',
+      headers: {
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal'
+      },
+      body: JSON.stringify(record)
+    });
+    if (!res.ok) {
+      console.error('Supabase insert failed:', res.status, await res.text());
+    }
+  } catch (err) {
+    console.error('Supabase insert error:', err);
+  }
+}
 
 function extractOutputText(data) {
   if (typeof data.output_text === 'string' && data.output_text) return data.output_text;
